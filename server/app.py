@@ -110,7 +110,9 @@ class Handler(SimpleHTTPRequestHandler):
    if path=='/api/notes':
     with connect() as c:r=c.execute('SELECT data FROM notes WHERE user=?',(u['id'],)).fetchone()
     return self.reply(json.loads(r[0]) if r else [])
-   if path=='/api/zoom':return self.reply({'configured':bool(os.getenv('ZOOM_SDK_KEY') and os.getenv('ZOOM_SDK_SECRET') and os.getenv('ZOOM_PASSCODE'))})
+   if path=='/api/zoom':
+    client_id=os.getenv('ZOOM_CLIENT_ID');secret=os.getenv('ZOOM_CLIENT_SECRET');meeting=os.getenv('ZOOM_MEETING_NUMBER','8369840665');password=os.getenv('ZOOM_PASSCODE','')
+    return self.reply({'configured':bool(client_id and secret and meeting and password)})
    if path.startswith('/uploads/'):
     self.path='/'+Path(path).name; self.directory=str(DATA/'uploads'); return super().do_GET()
    if path.startswith('/api/'):return self.reply({'error':'Bulunamadı.'},404)
@@ -203,12 +205,13 @@ class Handler(SimpleHTTPRequestHandler):
    with connect() as c:c.execute('INSERT OR REPLACE INTO notes VALUES(?,?)',(u['id'],json.dumps(d)))
    return self.reply({})
   if path=='/api/zoom/join':
-   key=os.getenv('ZOOM_SDK_KEY'); secret=os.getenv('ZOOM_SDK_SECRET'); password=os.getenv('ZOOM_PASSCODE')
-   if not key or not secret or not password:return self.reply({'error':'Canlı yayın bağlantısı henüz yapılandırılmadı.'},503)
+   client_id=os.getenv('ZOOM_CLIENT_ID');secret=os.getenv('ZOOM_CLIENT_SECRET');meeting=os.getenv('ZOOM_MEETING_NUMBER','8369840665');password=os.getenv('ZOOM_PASSCODE','')
+   if not client_id or not secret or not password:return self.reply({'error':'Canlı yayın bağlantısı henüz yapılandırılmadı.'},503)
+   if not re.fullmatch(r'\d{9,11}',meeting):return self.reply({'error':'Zoom toplantı numarası geçersiz.'},500)
    def enc(x):return base64.urlsafe_b64encode(json.dumps(x,separators=(',',':')).encode()).rstrip(b'=').decode()
-   now=int(time.time())-30; meeting='8369840665'; payload={'appKey':key,'sdkKey':key,'mn':meeting,'role':0,'iat':now,'exp':now+7200,'tokenExp':now+7200}
+   now=int(time.time())-30;payload={'appKey':client_id,'mn':meeting,'role':0,'iat':now,'exp':now+7200,'tokenExp':now+7200}
    msg=enc({'alg':'HS256','typ':'JWT'})+'.'+enc(payload); signature=msg+'.'+base64.urlsafe_b64encode(hmac.new(secret.encode(),msg.encode(),hashlib.sha256).digest()).rstrip(b'=').decode()
-   return self.reply({'signature':signature,'sdkKey':key,'meetingNumber':meeting,'password':password,'userName':u['name']})
+   return self.reply({'signature':signature,'meetingNumber':meeting,'password':password,'userName':u['name']})
   if u['role']!='admin':return self.reply({'error':'Yönetici yetkisi gerekli.'},403)
   if path in ('/api/gallery/photo','/api/gallery/video','/api/gallery/audio'):
    kind=path.rsplit('/',1)[-1]; mime=self.headers.get('Content-Type','').split(';')[0]

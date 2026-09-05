@@ -4,3 +4,12 @@ services:
     env: python
     buildCommand: npm install && npm run build
     startCommand: python3 server/app.py
+    envVars:
+      - key: ZOOM_CLIENT_ID
+        value: "jeRflt5gTxOg2UcAhJZ5A"
+      - key: ZOOM_CLIENT_SECRET
+        sync: false
+      - key: ZOOM_MEETING_NUMBER
+        value: "8369840665"
+      - key: ZOOM_PASSCODE
+        sync: false
