@@ -138,7 +138,7 @@ class Handler(SimpleHTTPRequestHandler):
     self.path='/'+Path(path).name; self.directory=str(DATA/'uploads'); return super().do_GET()
    if path.startswith('/api/'):return self.reply({'error':'Bulunamadı.'},404)
   self.directory=str(ROOT/'dist')
-  if path not in ('/','/index.html','/favicon.svg') and not path.startswith(('/assets/','/videos/')):return self.reply({'error':'Bulunamadı.'},404)
+  if path not in ('/','/index.html','/favicon.svg','/beykoz-login-background.webp') and not path.startswith(('/assets/','/videos/')):return self.reply({'error':'Bulunamadı.'},404)
   return super().do_GET()
  def do_POST(self):
   try:self.post()
