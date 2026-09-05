@@ -11,6 +11,12 @@ services:
     envVars:
       - key: BEYKOZ_DATA
         value: /var/data
+      - key: BEYKOZ_ADMIN_NAME
+        value: "Harun Akdemir"
+      - key: BEYKOZ_ADMIN_USERNAME
+        value: "h.akdemir"
+      - key: BEYKOZ_ADMIN_PASSWORD
+        sync: false
       - key: ZOOM_CLIENT_ID
         value: "jeRflt5gTxOg2UcAhJZ5A"
       - key: ZOOM_CLIENT_SECRET

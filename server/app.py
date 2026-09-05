@@ -20,6 +20,16 @@ def init():
   if 'email' in columns:
    c.execute('ALTER TABLE users RENAME COLUMN email TO username')
   c.execute('INSERT OR IGNORE INTO content VALUES(1,?)', ((ROOT/'server/seed.json').read_text(),))
+  admin_username=os.getenv('BEYKOZ_ADMIN_USERNAME','').strip().lower();admin_password=os.getenv('BEYKOZ_ADMIN_PASSWORD','');admin_name=os.getenv('BEYKOZ_ADMIN_NAME','Harun Akdemir').strip()
+  if admin_username and admin_password:
+   if not re.fullmatch(r'[a-z0-9_.-]{3,32}',admin_username) or len(admin_password)<10:raise ValueError('Geçersiz yönetici hesabı ortam ayarı.')
+   row=c.execute('SELECT id,data FROM users WHERE username=?',(admin_username,)).fetchone()
+   if row:
+    account=json.loads(row['data']);account.update({'name':admin_name,'username':admin_username,'role':'admin','status':'approved'})
+    c.execute('UPDATE users SET data=?,password=? WHERE id=?',(json.dumps(account),digest(admin_password),row['id']))
+   else:
+    identifier=secrets.token_hex(16);now=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime());account={'id':identifier,'name':admin_name,'username':admin_username,'email':'','phone':'','notes':'','registeredAt':now,'role':'admin','status':'approved'}
+    c.execute('INSERT INTO users(id,data,username,password) VALUES(?,?,?,?)',(identifier,json.dumps(account),admin_username,digest(admin_password)))
 def digest(p, salt=None):
  salt=salt or secrets.token_hex(16)
  return salt+':'+hashlib.pbkdf2_hmac('sha256',p.encode(),salt.encode(),600000).hex()
@@ -271,6 +281,10 @@ class Handler(SimpleHTTPRequestHandler):
     target=json.loads(r[0])
     if d['action']=='delete':c.execute('DELETE FROM users WHERE id=?',(d['id'],))
     else:
+     if d['action'] in ('make-admin','make-member'):
+      if target.get('status')!='approved':return self.reply({'error':'Yalnızca onaylı üyelere yönetici yetkisi verilebilir.'},400)
+      target['role']='admin' if d['action']=='make-admin' else 'member';c.execute('UPDATE users SET data=? WHERE id=?',(json.dumps(target),d['id']))
+      return self.reply({})
      if d['action'] not in ('approved','rejected','suspended'):raise ValueError()
      if d['action']=='approved' and not target.get('username'):
       username=d.get('username','').strip().lower();pw=d.get('password','')
