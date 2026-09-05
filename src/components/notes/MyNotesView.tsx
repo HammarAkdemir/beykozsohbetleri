@@ -31,6 +31,7 @@ export const MyNotesView: React.FC<MyNotesViewProps> = ({
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
 
   // Filter notes
   const filteredHighlights = userHighlights.filter(h => {
@@ -50,26 +51,22 @@ export const MyNotesView: React.FC<MyNotesViewProps> = ({
     setTimeout(() => setCopiedId(null), 1800);
   };
 
-  const handleExportMarkdown = () => {
-    let md = `# Beykoz Sohbetleri - Kişisel Okuma Notlarım\n\n`;
-    md += `*Oluşturulma Tarihi: ${new Date().toLocaleDateString('tr-TR')}*\n\n---\n\n`;
-
-    filteredHighlights.forEach((h, index) => {
-      md += `### ${index + 1}. ${h.conversationTitle}\n`;
-      md += `> "${h.selectedText}"\n\n`;
-      if (h.note) {
-        md += `**Kişisel Notum:** ${h.note}\n\n`;
-      }
-      md += `*Tarih: ${new Date(h.createdAt).toLocaleDateString('tr-TR')}*\n\n---\n\n`;
-    });
-
-    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sohbet-notlarim-${new Date().toISOString().slice(0, 10)}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExportWord = async () => {
+    if (!filteredHighlights.length) return;
+    setExportBusy(true);
+    try {
+      const response = await fetch('/api/notes/export-docx', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({highlights:filteredHighlights})});
+      if (!response.ok) { const value=await response.json(); throw new Error(value.error||'Word dosyası oluşturulamadı.'); }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `beykoz-sohbetleri-notlarim-${new Date().toISOString().slice(0, 10)}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportBusy(false);
+    }
   };
 
   const totalNotesCount = userHighlights.filter(h => !!h.note).length;
@@ -100,14 +97,15 @@ export const MyNotesView: React.FC<MyNotesViewProps> = ({
             <span className="font-bold text-stone-900 dark:text-white">{totalNotesCount}</span> Not
           </div>
 
-          {userHighlights.length > 0 && (
+          {filteredHighlights.length > 0 && (
             <button
-              onClick={handleExportMarkdown}
+              onClick={handleExportWord}
+              disabled={exportBusy}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-900 dark:bg-amber-600 hover:bg-stone-800 dark:hover:bg-amber-700 text-white text-xs font-semibold transition-colors shadow-sm"
-              title="Notları Markdown Olarak İndir"
+              title="Notları Word Dosyası Olarak İndir"
             >
               <Download className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Dışa Aktar</span>
+              <span className="hidden sm:inline">{exportBusy?'Hazırlanıyor…':'Dışa Aktar'}</span>
             </button>
           )}
         </div>

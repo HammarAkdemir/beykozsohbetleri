@@ -75,12 +75,46 @@ def docx(raw):
    result.append({'id':secrets.token_hex(10),'text':plain,'html':''.join(runs),'kind':kind})
   if not result: raise ValueError('Dosyada okunabilir metin bulunamadı.')
   return result
+def notes_docx(highlights, conversations):
+ if not isinstance(highlights,list) or not highlights or len(highlights)>5000:raise ValueError()
+ conversation_map={item['id']:item for item in conversations};groups={}
+ for item in highlights:
+  if not isinstance(item,dict):raise ValueError()
+  conversation_id=str(item.get('conversationId',''))[:100];selected=str(item.get('selectedText','')).strip()[:10000];note=str(item.get('note','')).strip()[:10000]
+  if not selected:continue
+  conversation=conversation_map.get(conversation_id,{});title=str(conversation.get('title') or item.get('conversationTitle') or 'Sohbet')[:300]
+  groups.setdefault(conversation_id,{'title':title,'order':conversation.get('order',999999),'items':[]})['items'].append({'selected':selected,'note':note})
+ if not groups:raise ValueError()
+ def run(text,bold=False,italic=False,color='000000'):
+  props='<w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia" w:cs="Georgia"/><w:sz w:val="22"/><w:szCs w:val="22"/>'+('<w:b/>' if bold else '')+('<w:i/>' if italic else '')+f'<w:color w:val="{color}"/></w:rPr>'
+  return f'<w:r>{props}<w:t xml:space="preserve">{html.escape(text)}</w:t></w:r>'
+ def paragraph(runs,heading=False,keep=False):
+  spacing='<w:spacing w:before="'+('200' if heading else '0')+'" w:after="120" w:line="276" w:lineRule="auto"/>'
+  props='<w:pPr>'+spacing+('<w:keepNext/>' if keep else '')+('<w:keepLines/>' if heading else '')+'</w:pPr>'
+  return f'<w:p>{props}{runs}</w:p>'
+ body=paragraph(run('Beykoz Sohbetleri Notlarım',bold=True),heading=True,keep=True)
+ for group in sorted(groups.values(),key=lambda value:(value['order'],value['title'].casefold())):
+  body+=paragraph(run(group['title'],bold=True,color='7A1F2B'),heading=True,keep=True)
+  for item in group['items']:
+   body+=paragraph(run('“'+item['selected']+'”',italic=True),keep=bool(item['note']))
+   if item['note']:body+=paragraph(run('Not: ',bold=True)+run(item['note']))
+ document='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="567" w:footer="567" w:gutter="0"/><w:cols w:num="2" w:space="567" w:sep="1"/></w:sectPr></w:body></w:document>'
+ styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia" w:cs="Georgia"/><w:sz w:val="22"/><w:szCs w:val="22"/><w:color w:val="000000"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style></w:styles>'
+ types='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'
+ rels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'
+ document_rels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'
+ output=io.BytesIO()
+ with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as archive:
+  archive.writestr('[Content_Types].xml',types);archive.writestr('_rels/.rels',rels);archive.writestr('word/document.xml',document);archive.writestr('word/styles.xml',styles);archive.writestr('word/_rels/document.xml.rels',document_rels)
+ return output.getvalue()
 class Handler(SimpleHTTPRequestHandler):
  def log_message(self,*a): pass
  def reply(self,data,status=200,cookie=None):
   raw=json.dumps(data,ensure_ascii=False).encode(); self.send_response(status); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store')
   if cookie:self.send_header('Set-Cookie',cookie)
   self.end_headers(); self.wfile.write(raw)
+ def file_reply(self,raw,content_type,filename):
+  self.send_response(200);self.send_header('Content-Type',content_type);self.send_header('Content-Disposition',f'attachment; filename="{filename}"');self.send_header('Content-Length',str(len(raw)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(raw)
  def user(self):
   cookie=SimpleCookie(); cookie.load(self.headers.get('Cookie','')); token=cookie.get('beykoz_session')
   if not token:return None
@@ -235,6 +269,10 @@ class Handler(SimpleHTTPRequestHandler):
    for h in d:h['userId']=u['id']
    with connect() as c:c.execute('INSERT OR REPLACE INTO notes VALUES(?,?)',(u['id'],json.dumps(d)))
    return self.reply({})
+  if path=='/api/notes/export-docx':
+   highlights=d.get('highlights',[])
+   with connect() as c:content=json.loads(c.execute('SELECT data FROM content WHERE id=1').fetchone()[0])
+   return self.file_reply(notes_docx(highlights,content['conversations']),'application/vnd.openxmlformats-officedocument.wordprocessingml.document','beykoz-sohbetleri-notlarim.docx')
   if path=='/api/zoom/join':
    client_id=os.getenv('ZOOM_CLIENT_ID');secret=os.getenv('ZOOM_CLIENT_SECRET');meeting=os.getenv('ZOOM_MEETING_NUMBER','8369840665');password=os.getenv('ZOOM_PASSCODE','')
    if not client_id or not secret or not password:return self.reply({'error':'Canlı yayın bağlantısı henüz yapılandırılmadı.'},503)
