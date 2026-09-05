@@ -15,6 +15,7 @@ def init():
   c.executescript('CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY,data TEXT,username TEXT UNIQUE,password TEXT); CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user TEXT,expires REAL); CREATE TABLE IF NOT EXISTS content(id INTEGER PRIMARY KEY,data TEXT); CREATE TABLE IF NOT EXISTS notes(user TEXT PRIMARY KEY,data TEXT);')
   c.execute('CREATE TABLE IF NOT EXISTS gallery(id TEXT PRIMARY KEY,data TEXT)')
   c.execute('CREATE TABLE IF NOT EXISTS live_questions(id TEXT PRIMARY KEY,user_id TEXT,data TEXT)')
+  c.execute('CREATE TABLE IF NOT EXISTS live_viewers(user_id TEXT PRIMARY KEY,last_seen REAL)')
   columns={row[1] for row in c.execute('PRAGMA table_info(users)')}
   if 'email' in columns:
    c.execute('ALTER TABLE users RENAME COLUMN email TO username')
@@ -107,6 +108,16 @@ class Handler(SimpleHTTPRequestHandler):
     published=[{k:v for k,v in q.items() if k not in ('userId','author')} for q in rows if q['status']=='approved']
     mine=[{k:v for k,v in q.items() if k not in ('userId','author')} for q in rows if q['userId']==u['id'] and q['status']!='approved']
     return self.reply({'published':published,'mine':mine})
+   if path=='/api/live-viewers':
+    if u['role']!='admin':return self.reply({'error':'Yetkiniz yok.'},403)
+    cutoff=time.time()-45
+    with connect() as c:
+     c.execute('DELETE FROM live_viewers WHERE last_seen<?',(cutoff,))
+     rows=c.execute('SELECT u.data,v.last_seen FROM live_viewers v JOIN users u ON u.id=v.user_id WHERE v.last_seen>=? ORDER BY v.last_seen DESC',(cutoff,)).fetchall()
+    viewers=[]
+    for row in rows:
+     member=json.loads(row['data']);viewers.append({'id':member['id'],'name':member['name'],'lastSeen':row['last_seen']})
+    return self.reply({'viewers':viewers})
    if path=='/api/notes':
     with connect() as c:r=c.execute('SELECT data FROM notes WHERE user=?',(u['id'],)).fetchone()
     return self.reply(json.loads(r[0]) if r else [])
@@ -171,7 +182,17 @@ class Handler(SimpleHTTPRequestHandler):
    with connect() as c:
     row=c.execute('SELECT password FROM users WHERE id=?',(u['id'],)).fetchone()
     if not row or not row['password'] or not hmac.compare_digest(digest(current,row['password'].split(':')[0]),row['password']):return self.reply({'error':'Mevcut şifreniz hatalı.'},401)
-    c.execute('UPDATE users SET password=? WHERE id=?',(digest(new),u['id']))
+   c.execute('UPDATE users SET password=? WHERE id=?',(digest(new),u['id']))
+   return self.reply({'success':True})
+  if path=='/api/live-viewers':
+   action=d.get('action')
+   with connect() as c:
+    if action=='heartbeat':
+     content=json.loads(c.execute('SELECT data FROM content WHERE id=1').fetchone()[0])
+     if not content['liveStream'].get('isLive'):return self.reply({'error':'Yayın kapalı.'},409)
+     c.execute('INSERT OR REPLACE INTO live_viewers VALUES(?,?)',(u['id'],time.time()))
+    elif action=='leave':c.execute('DELETE FROM live_viewers WHERE user_id=?',(u['id'],))
+    else:raise ValueError()
    return self.reply({'success':True})
   if path=='/api/questions':
    if d.get('action')=='submit':
@@ -263,7 +284,9 @@ class Handler(SimpleHTTPRequestHandler):
   if path=='/api/content':
    with connect() as c:
     c.execute('BEGIN IMMEDIATE'); content=json.loads(c.execute('SELECT data FROM content WHERE id=1').fetchone()[0]); group=d['group']
-    if group=='liveStream':content[group].update({k:v for k,v in d['data'].items() if k in ('title','description','isLive','scheduledDate','scheduledTime','streamEmbedUrl')})
+    if group=='liveStream':
+     content[group].update({k:v for k,v in d['data'].items() if k in ('title','description','isLive','scheduledDate','scheduledTime','streamEmbedUrl')})
+     if not content[group].get('isLive'):c.execute('DELETE FROM live_viewers')
     elif group in ('conversations','videos'):
      if group=='videos' and d['action']=='reorder':
       ids=d.get('data')

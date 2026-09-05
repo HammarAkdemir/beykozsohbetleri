@@ -6,9 +6,11 @@ import {LiveQuestions} from './LiveQuestions';
 export function LiveBroadcastView(){
  const {liveStream}=useContent();const mount=useRef<HTMLDivElement>(null),player=useRef<HTMLDivElement>(null),client=useRef<any>(null);const [configured,setConfigured]=useState(false),[status,setStatus]=useState(''),[busy,setBusy]=useState(false),[joined,setJoined]=useState(false);
  useEffect(()=>{api('zoom').then(d=>setConfigured(d.configured)).catch(e=>setStatus(e.message));return()=>{client.current?.leaveMeeting();};},[]);
- async function watch(){setBusy(true);setStatus('Yayına bağlanılıyor…');try{const join=await api('zoom/join');const Zoom=(await import('@zoom/meetingsdk/embedded')).default;client.current=Zoom.createClient();await client.current.init({zoomAppRoot:mount.current!,language:'tr-TR',patchJsMedia:true,leaveOnPageUnload:true});await client.current.join(join);setJoined(true);setStatus('');}catch{setStatus('Yayına bağlanılamadı. Yayın açıldığında yeniden deneyin.');}finally{setBusy(false);}}
- async function fullscreen(){if(!document.fullscreenElement)await player.current?.requestFullscreen();else await document.exitFullscreen();}
  const embedUrl=liveStream.streamEmbedUrl;
+ const isWatching=liveStream.isLive&&(Boolean(embedUrl)||joined);
+ useEffect(()=>{if(!isWatching)return;const heartbeat=()=>api('live-viewers',{action:'heartbeat'}).catch(()=>{});heartbeat();const timer=window.setInterval(heartbeat,15000);return()=>{clearInterval(timer);fetch('/api/live-viewers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'leave'}),keepalive:true}).catch(()=>{});};},[isWatching]);
+ async function watch(){setBusy(true);setStatus('Yayına bağlanılıyor…');try{const join=await api('zoom/join');const Zoom=(await import('@zoom/meetingsdk/embedded')).default;client.current=Zoom.createClient();await client.current.init({zoomAppRoot:mount.current!,language:'tr-TR',patchJsMedia:true,leaveOnPageUnload:true});client.current.on('connection-change',(event:any)=>{if(event?.state==='Closed')setJoined(false);});await client.current.join(join);setJoined(true);setStatus('');}catch{setStatus('Yayına bağlanılamadı. Yayın açıldığında yeniden deneyin.');}finally{setBusy(false);}}
+ async function fullscreen(){if(!document.fullscreenElement)await player.current?.requestFullscreen();else await document.exitFullscreen();}
  return <div className="admin-shell live-page"><h1 className="text-4xl mb-4">Canlı Yayın</h1>
  <section className="live-stage">
   <Radio size={36}/>
