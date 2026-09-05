@@ -44,6 +44,27 @@ export const MyNotesView: React.FC<MyNotesViewProps> = ({
     return matchesSearch && matchesColor && matchesConv;
   });
 
+  const conversationOrder = new Map(conversations.map((conversation, index) => [conversation.id, index]));
+  const paragraphOrder = new Map(
+    conversations.flatMap(conversation =>
+      conversation.paragraphs.map((paragraph, index) => [`${conversation.id}:${paragraph.id}`, index])
+    )
+  );
+  const sortedHighlights = [...filteredHighlights].sort((a, b) => {
+    const conversationDifference =
+      (conversationOrder.get(a.conversationId) ?? Number.MAX_SAFE_INTEGER) -
+      (conversationOrder.get(b.conversationId) ?? Number.MAX_SAFE_INTEGER);
+    if (conversationDifference !== 0) return conversationDifference;
+
+    const baseParagraphId = (id: string) => id.replace(/-(subtitle|quote)$/, '');
+    const paragraphDifference =
+      (paragraphOrder.get(`${a.conversationId}:${baseParagraphId(a.paragraphId)}`) ?? Number.MAX_SAFE_INTEGER) -
+      (paragraphOrder.get(`${b.conversationId}:${baseParagraphId(b.paragraphId)}`) ?? Number.MAX_SAFE_INTEGER);
+    if (paragraphDifference !== 0) return paragraphDifference;
+
+    return (a.startOffset ?? 0) - (b.startOffset ?? 0);
+  });
+
   const handleCopyQuote = (id: string, text: string, note?: string) => {
     const copyContent = note ? `"${text}"\n\nNotum: ${note}` : `"${text}"`;
     navigator.clipboard.writeText(copyContent);
@@ -55,7 +76,7 @@ export const MyNotesView: React.FC<MyNotesViewProps> = ({
     if (!filteredHighlights.length) return;
     setExportBusy(true);
     try {
-      const response = await fetch('/api/notes/export-docx', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({highlights:filteredHighlights})});
+      const response = await fetch('/api/notes/export-docx', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({highlights:sortedHighlights})});
       if (!response.ok) { const value=await response.json(); throw new Error(value.error||'Word dosyası oluşturulamadı.'); }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -202,7 +223,7 @@ export const MyNotesView: React.FC<MyNotesViewProps> = ({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {filteredHighlights.map((hl) => {
+          {sortedHighlights.map((hl) => {
             const isEditing = editingNoteId === hl.id;
 
             return (
