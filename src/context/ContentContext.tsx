@@ -5,7 +5,7 @@ import {Conversation,ShortVideo,LiveStream} from '../types';
 const Context=createContext<any>(null);
 export function ContentProvider({children}:{children:React.ReactNode}){
  const {isApproved,currentUser}=useAuth();
- const [data,setData]=useState<{conversations:Conversation[],videos:ShortVideo[],liveStream:LiveStream}>({conversations:[],videos:[],liveStream:{isLive:false,title:'Beykoz Sohbetleri',description:'',scheduledDate:'',scheduledTime:'',zoomMeetingId:'',zoomPasscode:'',zoomDirectUrl:'',activeViewerCount:0}});
+ const [data,setData]=useState<{conversations:Conversation[],videos:ShortVideo[],liveStream:LiveStream}>({conversations:[],videos:[],liveStream:{isLive:false,title:'Beykoz Sohbetleri',description:'',scheduledDate:'',scheduledTime:'',activeViewerCount:0}});
  const [selected,setSelected]=useState(''),[error,setError]=useState('');
  useEffect(()=>{if(isApproved)api('content').then(setData).catch(e=>setError(e.message));else setData(d=>({...d,conversations:[],videos:[]}));},[isApproved,currentUser?.id]);
  async function mutate(group:string,action:string,item?:unknown,id?:string){const d=await api('content',{group,action,data:item,id});setData(d);return d[group]?.at(-1);}

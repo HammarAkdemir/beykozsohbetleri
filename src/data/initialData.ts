@@ -251,8 +251,5 @@ export const INITIAL_LIVESTREAM: LiveStream = {
   description: 'Değerli katılımcılarımızla birlikte canlı Zoom yayını üzerinden soru-cevap ve sohbet meclisi.',
   scheduledDate: '3 Eylül 2026 Perşembe',
   scheduledTime: '21:00 (Canlı Yayında)',
-  zoomMeetingId: '8369840665',
-  zoomPasscode: 'YTVYZ0R4cjBJUW5WL1IvcEtlRzJLUT09',
-  zoomDirectUrl: 'https://us06web.zoom.us/j/8369840665?pwd=YTVYZ0R4cjBJUW5WL1IvcEtlRzJLUT09',
   activeViewerCount: 47,
 };

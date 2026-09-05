@@ -4,7 +4,13 @@ services:
     env: python
     buildCommand: npm install && npm run build
     startCommand: python3 server/app.py
+    disk:
+      name: beykoz-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
+      - key: BEYKOZ_DATA
+        value: /var/data
       - key: ZOOM_CLIENT_ID
         value: "jeRflt5gTxOg2UcAhJZ5A"
       - key: ZOOM_CLIENT_SECRET

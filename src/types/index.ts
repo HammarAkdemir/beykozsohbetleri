@@ -77,9 +77,6 @@ export interface LiveStream {
   description: string;
   scheduledDate: string;
   scheduledTime: string;
-  zoomMeetingId: string;
-  zoomPasscode: string;
-  zoomDirectUrl: string;
   streamEmbedUrl?: string;
   activeViewerCount: number;
 }

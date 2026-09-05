@@ -263,7 +263,7 @@ class Handler(SimpleHTTPRequestHandler):
   if path=='/api/content':
    with connect() as c:
     c.execute('BEGIN IMMEDIATE'); content=json.loads(c.execute('SELECT data FROM content WHERE id=1').fetchone()[0]); group=d['group']
-    if group=='liveStream':content[group].update({k:v for k,v in d['data'].items() if k in ('title','description','isLive','scheduledDate','scheduledTime','zoomMeetingId','zoomPasscode','zoomDirectUrl','streamEmbedUrl')})
+    if group=='liveStream':content[group].update({k:v for k,v in d['data'].items() if k in ('title','description','isLive','scheduledDate','scheduledTime','streamEmbedUrl')})
     elif group in ('conversations','videos'):
      if group=='videos' and d['action']=='reorder':
       ids=d.get('data')
