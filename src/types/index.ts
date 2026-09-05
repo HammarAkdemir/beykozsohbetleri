@@ -80,6 +80,7 @@ export interface LiveStream {
   zoomMeetingId: string;
   zoomPasscode: string;
   zoomDirectUrl: string;
+  streamEmbedUrl?: string;
   activeViewerCount: number;
 }
 
