@@ -284,4 +284,4 @@ class Handler(SimpleHTTPRequestHandler):
    return self.reply(content)
   self.reply({'error':'Bulunamadı.'},404)
 if __name__=='__main__':
- init(); print('Beykoz Sohbetleri: http://127.0.0.1:'+os.getenv('PORT','4173'),flush=True);ThreadingHTTPServer(('127.0.0.1',int(os.getenv('PORT','4173'))),Handler).serve_forever()
+ init(); host=os.getenv('HOST','0.0.0.0'); port=int(os.getenv('PORT','4173')); print(f'Beykoz Sohbetleri: http://{host}:{port}',flush=True);ThreadingHTTPServer((host,port),Handler).serve_forever()

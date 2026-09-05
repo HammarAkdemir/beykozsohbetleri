@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: beykozsohbetleri
+    runtime: python
+    plan: free
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    startCommand: python3 server/app.py
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: NODE_VERSION
+        value: 22.14.0
