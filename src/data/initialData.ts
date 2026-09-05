@@ -3,8 +3,9 @@ import { Conversation, ShortVideo, User, LiveStream, Highlight } from '../types'
 export const INITIAL_USERS: User[] = [
   {
     id: 'user-admin',
-    name: 'Yönetici',
-    email: 'admin@sohbet.com',
+    name: 'Harun Akdemir',
+    username: 'H.Akdemir',
+    email: 'harunakdemir@gmail.com',
     role: 'admin',
     status: 'approved',
     registeredAt: '2026-08-01T10:00:00Z',
@@ -250,8 +251,8 @@ export const INITIAL_LIVESTREAM: LiveStream = {
   description: 'Değerli katılımcılarımızla birlikte canlı Zoom yayını üzerinden soru-cevap ve sohbet meclisi.',
   scheduledDate: '3 Eylül 2026 Perşembe',
   scheduledTime: '21:00 (Canlı Yayında)',
-  zoomMeetingId: '849 3201 9844',
-  zoomPasscode: '772941',
-  zoomDirectUrl: 'https://zoom.us/j/84932019844?pwd=samplePasscodeHash',
+  zoomMeetingId: '8369840665',
+  zoomPasscode: 'YTVYZ0R4cjBJUW5WL1IvcEtlRzJLUT09',
+  zoomDirectUrl: 'https://us06web.zoom.us/j/8369840665?pwd=YTVYZ0R4cjBJUW5WL1IvcEtlRzJLUT09',
   activeViewerCount: 47,
 };

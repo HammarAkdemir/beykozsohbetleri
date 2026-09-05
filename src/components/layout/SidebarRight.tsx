@@ -33,6 +33,8 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const [mutedVideos, setMutedVideos] = useState<Record<string, boolean>>({});
   const [modalVideo, setModalVideo] = useState<ShortVideo | null>(null);
   const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({});
+  const modalVideoRef = useRef<HTMLVideoElement | null>(null);
+  const modalStartTime = useRef(0);
   const videoContainerRef = useRef<HTMLDivElement>(null);
 
   // Okuma esnasında kısa videolar sekmesi de otomatik aşağı insin (Kullanıcı İsteği)
@@ -84,6 +86,21 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     const el = videoRefs.current[videoId];
     if (el) el.muted = muted;
     setMutedVideos(prev => ({ ...prev, [videoId]: muted }));
+  };
+
+  const closeModalVideo = () => {
+    const enlarged = modalVideoRef.current;
+    if (enlarged) {
+      enlarged.pause();
+      if (modalVideo) {
+        const inline = videoRefs.current[modalVideo.id];
+        if (inline && Number.isFinite(enlarged.currentTime)) inline.currentTime = enlarged.currentTime;
+      }
+      enlarged.removeAttribute('src');
+      enlarged.load();
+    }
+    setPlayingVideoId(null);
+    setModalVideo(null);
   };
 
   return (
@@ -218,6 +235,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        modalStartTime.current=videoRefs.current[video.id]?.currentTime||0;
                         Object.values(videoRefs.current).forEach(el => el?.pause());
                         setPlayingVideoId(null);
                         setModalVideo(video);
@@ -253,7 +271,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
       {/* Tam Ekran / Büyük Oynatıcı Modalı */}
       {modalVideo && (
         <div 
-          onClick={() => setModalVideo(null)}
+          onClick={closeModalVideo}
           className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in"
         >
           <div 
@@ -262,7 +280,8 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
           >
             <div className="p-3 border-b border-stone-800 flex items-center justify-end text-white">
               <button
-                onClick={() => setModalVideo(null)}
+                onClick={closeModalVideo}
+                aria-label="Büyük video görünümünü kapat"
                 className="p-1 rounded-lg hover:bg-stone-800 text-stone-400 hover:text-white"
               >
                 <X className="w-4 h-4" />
@@ -271,6 +290,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
 
             <div className="relative aspect-[9/16] bg-black">
               <video
+                ref={modalVideoRef}
                 src={modalVideo.videoUrl}
                 muted={mutedVideos[modalVideo.id] ?? true}
                 onVolumeChange={e => { const muted = e.currentTarget.muted; setMutedVideos(prev => prev[modalVideo.id] === muted ? prev : { ...prev, [modalVideo.id]: muted }); }}
@@ -279,6 +299,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                 controlsList="nodownload"
                 disablePictureInPicture
                 onContextMenu={(e) => e.preventDefault()}
+                onLoadedMetadata={e=>{if(modalStartTime.current<e.currentTarget.duration)e.currentTarget.currentTime=modalStartTime.current;}}
                 autoPlay
                 playsInline
               />

@@ -145,11 +145,11 @@ class Handler(SimpleHTTPRequestHandler):
       u={'id':secrets.token_hex(16),'name':d['name'].strip(),'username':username,'email':'','phone':'','notes':'','registeredAt':now,'role':'admin','status':'approved'}
       stored_username=username;stored_password=digest(pw)
      else:
-      first_name=d.get('firstName','').strip();last_name=d.get('lastName','').strip();birth_date=d.get('birthDate','').strip();phone=d.get('phone','').strip()
-      if not (1<=len(first_name)<=80 and 1<=len(last_name)<=80 and re.fullmatch(r'\d{4}-\d{2}-\d{2}',birth_date) and 7<=len(re.sub(r'\D','',phone))<=15):raise ValueError()
+      name=d.get('name','').strip() or (d.get('firstName','').strip()+' '+d.get('lastName','').strip()).strip();birth_date=d.get('birthDate','').strip();phone=d.get('phone','').strip()
+      if not (1<=len(name)<=160 and re.fullmatch(r'\d{4}-\d{2}-\d{2}',birth_date) and 7<=len(re.sub(r'\D','',phone))<=15):raise ValueError()
       try:time.strptime(birth_date,'%Y-%m-%d')
       except ValueError:raise ValueError()
-      u={'id':secrets.token_hex(16),'name':first_name+' '+last_name,'firstName':first_name,'lastName':last_name,'birthDate':birth_date,'username':'','email':'','phone':phone,'notes':'','registeredAt':now,'role':'member','status':'pending'}
+      u={'id':secrets.token_hex(16),'name':name,'birthDate':birth_date,'username':'','email':'','phone':phone,'notes':'','registeredAt':now,'role':'member','status':'pending'}
       stored_username=None;stored_password=None
      try:c.execute('INSERT INTO users(id,data,username,password) VALUES(?,?,?,?)',(u['id'],json.dumps(u),stored_username,stored_password))
      except sqlite3.IntegrityError:return self.reply({'error':'Bu kullanıcı adı zaten kullanılıyor.'},409)
