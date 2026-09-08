@@ -31,6 +31,13 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
     c.title.toLocaleLowerCase('tr-TR').includes(searchTerm.toLocaleLowerCase('tr-TR'))
   );
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
@@ -42,7 +49,7 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         aria-hidden="true"
       />
 
-      <aside className="fixed lg:sticky top-16 left-0 z-30 h-[calc(100vh-4rem)] w-80 sm:w-88 flex-shrink-0 bg-paper-100/90 dark:bg-stone-900/95 border-r border-paper-300 dark:border-stone-800 flex flex-col transition-all duration-300 overflow-hidden shadow-lg lg:shadow-none">
+      <aside className="conversation-sidebar fixed lg:sticky top-16 left-0 z-30 h-[calc(100vh-4rem)] w-80 sm:w-88 flex-shrink-0 bg-paper-100/90 dark:bg-stone-900/95 border-r border-paper-300 dark:border-stone-800 flex flex-col transition-all duration-300 overflow-hidden shadow-lg lg:shadow-none">
         
         {/* Başlık & Kapatma Butonu */}
         <div className="p-4 pb-3 border-b border-paper-300/80 dark:border-stone-800 flex items-center justify-between">

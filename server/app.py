@@ -283,6 +283,26 @@ class Handler(SimpleHTTPRequestHandler):
    msg=enc({'alg':'HS256','typ':'JWT'})+'.'+enc(payload); signature=msg+'.'+base64.urlsafe_b64encode(hmac.new(secret.encode(),msg.encode(),hashlib.sha256).digest()).rstrip(b'=').decode()
    return self.reply({'signature':signature,'meetingNumber':meeting,'password':password,'userName':u['name']})
   if u['role']!='admin':return self.reply({'error':'Yönetici yetkisi gerekli.'},403)
+  if path=='/api/gallery/videos':
+   with connect() as c:
+    c.execute('BEGIN IMMEDIATE')
+    content=json.loads(c.execute('SELECT data FROM content WHERE id=1').fetchone()[0])
+    gallery=[json.loads(row[0]) for row in c.execute('SELECT data FROM gallery')]
+    entries={'gallery:'+x['id']:x for x in gallery if x['kind']=='video'}
+    entries.update({'short:'+x['id']:x for x in content['videos']})
+    if d.get('action')=='rename':
+     item=entries.get(d.get('id'));name=d.get('name','').strip()
+     if item is None:return self.reply({'error':'Video bulunamadı.'},404)
+     if not name or len(name)>200:raise ValueError()
+     item['name' if d['id'].startswith('gallery:') else 'title']=name
+    elif d.get('action')=='reorder':
+     ids=d.get('ids')
+     if not isinstance(ids,list) or any(not isinstance(i,str) for i in ids) or len(ids)!=len(entries) or set(ids)!=set(entries):return self.reply({'error':'Video listesi değişti. Sayfayı yenileyin.'},409)
+     for index,key in enumerate(ids):entries[key]['galleryOrder']=index
+    else:raise ValueError()
+    for item in gallery:c.execute('UPDATE gallery SET data=? WHERE id=?',(json.dumps(item),item['id']))
+    c.execute('UPDATE content SET data=? WHERE id=1',(json.dumps(content),))
+   return self.reply({})
   if path in ('/api/gallery/photo','/api/gallery/video','/api/gallery/audio'):
    kind=path.rsplit('/',1)[-1]; mime=self.headers.get('Content-Type','').split(';')[0]
    allowed={'image/jpeg':'.jpg','image/png':'.png','image/webp':'.webp','image/gif':'.gif'} if kind=='photo' else {'video/mp4':'.mp4','video/webm':'.webm','video/quicktime':'.mov'}
@@ -318,7 +338,20 @@ class Handler(SimpleHTTPRequestHandler):
     r=c.execute('SELECT data FROM users WHERE id=?',(d['id'],)).fetchone()
     if not r:raise ValueError()
     target=json.loads(r[0])
-    if d['action']=='delete':c.execute('DELETE FROM users WHERE id=?',(d['id'],))
+    if d['action']=='delete':
+     for table,column in [('sessions','user'),('notes','user'),('live_viewers','user_id'),('live_questions','user_id')]:c.execute(f'DELETE FROM {table} WHERE {column}=?',(d['id'],))
+     c.execute('DELETE FROM users WHERE id=?',(d['id'],))
+    elif d['action']=='edit':
+     username=d.get('username','').strip().lower();name=d.get('name','').strip();phone=d.get('phone','').strip();birth=d.get('birthDate','').strip();pw=d.get('password','')
+     if not re.fullmatch(r'[a-z0-9_.-]{3,32}',username) or not 1<=len(name)<=160 or len(phone)>40 or (pw and not 10<=len(pw)<=256):return self.reply({'error':'Ad, kullanıcı adı veya şifre geçersiz.'},400)
+     if birth:
+      try:time.strptime(birth,'%Y-%m-%d')
+      except ValueError:raise ValueError()
+     target.update(name=name,username=username,phone=phone,birthDate=birth)
+     try:c.execute('UPDATE users SET data=?,username=? WHERE id=?',(json.dumps(target),username,d['id']))
+     except sqlite3.IntegrityError:return self.reply({'error':'Bu kullanıcı adı zaten kullanılıyor.'},409)
+     if pw:c.execute('UPDATE users SET password=? WHERE id=?',(digest(pw),d['id']))
+     c.execute('DELETE FROM sessions WHERE user=?',(d['id'],))
     else:
      if d['action'] in ('make-admin','make-member'):
       if target.get('status')!='approved':return self.reply({'error':'Yalnızca onaylı üyelere yönetici yetkisi verilebilir.'},400)

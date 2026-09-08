@@ -1,21 +1,22 @@
+import {PreviewVideo} from '../media/PreviewVideo';
 import {useEffect,useRef,useState} from 'react';
 import {Image,Video,Headphones,Plus,X,ChevronLeft,ChevronRight,Trash2} from 'lucide-react';
 import {useAuth} from '../../context/AuthContext';
 import {api,upload} from '../../lib/api';
 import {useContent} from '../../context/ContentContext';
 
-type Media={id:string;kind:'photo'|'video'|'audio';url:string;name?:string;createdAt:string};
+type Media={id:string;kind:'photo'|'video'|'audio';url:string;name?:string;createdAt:string;galleryOrder?:number};
 type VideoEntry={source:'gallery'|'short';item:any};
 const VIDEOS_PER_PAGE=7;
 
 export function GalleryView({kind}:{kind:'photo'|'video'|'audio'}){
  const {isAdmin}=useAuth();
- const {videos:shortVideos,deleteVideo}=useContent();
+ const {videos:shortVideos,deleteVideo,refreshContent}=useContent();
  const [items,setItems]=useState<Media[]>([]),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[selected,setSelected]=useState<string|null>(null),[page,setPage]=useState(1);
  const input=useRef<HTMLInputElement>(null),dialog=useRef<HTMLDialogElement>(null),top=useRef<HTMLDivElement>(null);
  const photo=kind==='photo',audio=kind==='audio',label=photo?'fotoğraf':audio?'ses kaydı':'video',Icon=photo?Image:audio?Headphones:Video;
  const visible=items.filter(i=>i.kind===kind),index=visible.findIndex(i=>i.id===selected);
- const videoEntries:VideoEntry[]=kind==='video'?[...visible.map(item=>({source:'gallery' as const,item})),...shortVideos.map((item:any)=>({source:'short' as const,item}))]:[];
+ const videoEntries:VideoEntry[]=kind==='video'?[...visible.map(item=>({source:'gallery' as const,item})),...shortVideos.map((item:any)=>({source:'short' as const,item}))].sort((a,b)=>(a.item.galleryOrder??Number.MAX_SAFE_INTEGER)-(b.item.galleryOrder??Number.MAX_SAFE_INTEGER)):[];
  const pageCount=Math.max(1,Math.ceil(videoEntries.length/VIDEOS_PER_PAGE));
  const pageVideos=videoEntries.slice((page-1)*VIDEOS_PER_PAGE,page*VIDEOS_PER_PAGE);
 
@@ -30,6 +31,15 @@ export function GalleryView({kind}:{kind:'photo'|'video'|'audio'}){
  }
  async function remove(item:Media){if(!confirm('Bu '+label+' kaldırılsın mı?'))return;setBusy(true);try{await api('gallery/delete',{id:item.id});setItems(prev=>prev.filter(i=>i.id!==item.id));setSelected(null);setMessage('Galeriden kaldırıldı.');}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}}
  async function removeShortVideo(id:string){if(!confirm('Bu kısa video kaldırılsın mı?'))return;setBusy(true);try{await deleteVideo(id);setMessage('Kısa video kaldırıldı.');}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}}
+ async function editVideo(entry:VideoEntry,action:'rename'|'reorder',direction=0){
+  const id=entry.source+':'+entry.item.id;
+  let name:string|null=null;
+  if(action==='rename'){name=prompt('Video adı',entry.item.title||entry.item.name||'');if(!name?.trim())return;}
+  const ids=videoEntries.map(v=>v.source+':'+v.item.id),from=ids.indexOf(id),to=from+direction;
+  if(action==='reorder'){if(to<0||to>=ids.length)return;[ids[from],ids[to]]=[ids[to],ids[from]];}
+  setBusy(true);setMessage('');try{await api('gallery/videos',{action,id,name,ids});setItems(await api('gallery'));await refreshContent();setMessage(action==='rename'?'Video adı kaydedildi.':'Video sırası kaydedildi.');}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}
+ }
+ const videoControls=(entry:VideoEntry)=>{const index=videoEntries.indexOf(entry);return isAdmin?<div className="video-admin-controls"><button disabled={busy} onClick={()=>editVideo(entry,'rename')}>İsim düzenle</button><button disabled={busy||index===0} aria-label="Videoyu önceye taşı" onClick={()=>editVideo(entry,'reorder',-1)}>← Önce</button><button disabled={busy||index===videoEntries.length-1} aria-label="Videoyu sonraya taşı" onClick={()=>editVideo(entry,'reorder',1)}>Sonra →</button></div>:null;};
  const move=(delta:number)=>{if(visible.length)setSelected(visible[(index+delta+visible.length)%visible.length].id);};
  const goPage=(next:number)=>{setPage(next);requestAnimationFrame(()=>top.current?.scrollIntoView({behavior:'smooth',block:'start'}));};
  const empty=kind==='video'?videoEntries.length===0:visible.length===0;
@@ -39,7 +49,7 @@ export function GalleryView({kind}:{kind:'photo'|'video'|'audio'}){
  {loading?<p role="status">Yükleniyor…</p>:empty?<div className="gallery-empty"><Icon size={40}/><p>Henüz {label} eklenmedi.</p></div>:<>
   <div className={'gallery-grid '+(photo?'gallery-photos':audio?'gallery-audio':'gallery-videos')}>
    {kind!=='video'&&visible.map((item,i)=><figure key={item.id} className="gallery-item">{photo?<button className="gallery-photo" aria-label={`Fotoğraf ${i+1}, büyüt`} onClick={()=>setSelected(item.id)}><img src={item.url} alt={`Beykoz Sohbetleri fotoğrafı ${i+1}`} loading="lazy"/></button>:<div className="audio-recording"><Headphones size={22}/><p>{item.name||`Ses kaydı ${i+1}`}</p><audio src={item.url} controls preload="metadata" aria-label={item.name||`Ses kaydı ${i+1}`}/></div>}{isAdmin&&<button className="gallery-remove" aria-label={photo?'Fotoğrafı kaldır':'Ses kaydını kaldır'} title="Galeriden kaldır" disabled={busy} onClick={()=>remove(item)}><Trash2 size={15}/></button>}</figure>)}
-   {kind==='video'&&pageVideos.map((entry,i)=>{const number=(page-1)*VIDEOS_PER_PAGE+i+1;if(entry.source==='gallery'){const item=entry.item as Media;return <figure key={item.id} className="gallery-item"><video src={item.url} controls playsInline preload="metadata" aria-label={`Galeri videosu ${number}`}/>{isAdmin&&<button className="gallery-remove" aria-label="Videoyu kaldır" title="Galeriden kaldır" disabled={busy} onClick={()=>remove(item)}><Trash2 size={15}/></button>}</figure>;}const video=entry.item;return <figure key={'short-'+video.id} className="gallery-item short-gallery-item">{video.sourceType&&video.sourceType!=='upload'?<iframe src={video.videoUrl} title={'Kısa video '+number} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>:<video src={video.videoUrl} controls playsInline preload="metadata" aria-label={'Kısa video '+number}/>}<figcaption>Kısa video</figcaption>{isAdmin&&<button className="gallery-remove" aria-label="Videoyu kaldır" title="Videoyu kaldır" disabled={busy} onClick={()=>removeShortVideo(video.id)}><Trash2 size={15}/></button>}</figure>;})}
+   {kind==='video'&&pageVideos.map((entry,i)=>{const number=(page-1)*VIDEOS_PER_PAGE+i+1;if(entry.source==='gallery'){const item=entry.item as Media;return <figure key={item.id} className="gallery-item"><PreviewVideo src={item.url} label={item.name||`Galeri videosu ${number}`}/>{item.name&&<figcaption>{item.name}</figcaption>}{videoControls(entry)}{isAdmin&&<button className="gallery-remove" aria-label="Videoyu kaldır" title="Galeriden kaldır" disabled={busy} onClick={()=>remove(item)}><Trash2 size={15}/></button>}</figure>;}const video=entry.item;return <figure key={'short-'+video.id} className="gallery-item short-gallery-item">{video.sourceType&&video.sourceType!=='upload'?<iframe src={video.videoUrl} title={'Kısa video '+number} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>:<PreviewVideo src={video.videoUrl} label={video.title||'Kısa video '+number}/>}{video.title&&<figcaption>{video.title}</figcaption>}{videoControls(entry)}{isAdmin&&<button className="gallery-remove" aria-label="Videoyu kaldır" title="Videoyu kaldır" disabled={busy} onClick={()=>removeShortVideo(video.id)}><Trash2 size={15}/></button>}</figure>;})}
   </div>
   {kind==='video'&&pageCount>1&&<nav className="video-pagination" aria-label="Video sayfaları"><button onClick={()=>goPage(page-1)} disabled={page===1}><ChevronLeft size={17}/>Önceki</button><span>Sayfa <strong>{page}</strong> / {pageCount}</span><button onClick={()=>goPage(page+1)} disabled={page===pageCount}>Sonraki<ChevronRight size={17}/></button></nav>}
  </>}

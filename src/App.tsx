@@ -21,7 +21,7 @@ const MainLayout: React.FC = () => {
   const [adminSection, setAdminSection] = useState('conversations');
   const [activeTab, setActiveTab] = useState<'reader' | 'live' | 'notes' | 'admin' | 'photos' | 'videos' | 'audio'>('live');
   useEffect(() => { if (isApproved) setActiveTab('live'); }, [isApproved]);
-  const [isSidebarLeftOpen, setIsSidebarLeftOpen] = useState(true);
+  const [isSidebarLeftOpen, setIsSidebarLeftOpen] = useState(() => window.innerWidth >= 1024);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   const handleSelectConversationFromLeft = (id: string) => {
@@ -87,7 +87,7 @@ const MainLayout: React.FC = () => {
         {/* Orta Alan: Dinamik İçerik Görünümü */}
         <main className="flex-1 min-w-0 transition-all">
           {activeTab === 'reader' && !isSidebarLeftOpen && (
-            <div className="sticky top-16 z-20 flex justify-start p-3 pointer-events-none">
+            <div className="reader-conversation-access flex justify-start p-3">
               <button onClick={() => setIsSidebarLeftOpen(true)} aria-expanded={false} className="pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-xl border border-paper-300 bg-white text-sage-800 shadow-sm dark:bg-stone-900 dark:text-sage-200 dark:border-stone-700" aria-label="Sohbet listesini aç">Sohbetler <ChevronDown size={14}/></button>
             </div>
           )}

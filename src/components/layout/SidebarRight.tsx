@@ -37,26 +37,11 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const modalStartTime = useRef(0);
   const videoContainerRef = useRef<HTMLDivElement>(null);
 
-  // Okuma esnasında kısa videolar sekmesi de otomatik aşağı insin (Kullanıcı İsteği)
   React.useEffect(() => {
-    const handleDocumentScroll = () => {
-      if (!videoContainerRef.current) return;
-      const doc = document.documentElement;
-      const totalDocScroll = doc.scrollHeight - window.innerHeight;
-      if (totalDocScroll <= 0) return;
-
-      const scrollRatio = window.scrollY / totalDocScroll;
-      const maxVideoScroll = videoContainerRef.current.scrollHeight - videoContainerRef.current.clientHeight;
-
-      if (maxVideoScroll > 0) {
-        // Okuma ilerledikçe videolar listesi de orantılı olarak kendiliğinden aşağı iner
-        videoContainerRef.current.scrollTop = scrollRatio * maxVideoScroll;
-      }
-    };
-
-    window.addEventListener('scroll', handleDocumentScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleDocumentScroll);
-  }, []);
+    setPlayingVideoId(null);
+    setModalVideo(null);
+    if (videoContainerRef.current) videoContainerRef.current.scrollTop = 0;
+  }, [activeConversation?.id]);
 
   if (!isOpen) return null;
 
@@ -75,14 +60,18 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
           videoRefs.current[id]?.pause();
         }
       });
-      videoEl.play().catch(e => console.log('Autoplay prevented', e));
-      setPlayingVideoId(videoId);
+      videoEl.play().then(() => {
+        setPlayingVideoId(videoId);
+        const card = videoEl.closest('[data-video-card]') as HTMLElement | null;
+        const list = videoContainerRef.current;
+        if (card && list) list.scrollTop += card.getBoundingClientRect().top - list.getBoundingClientRect().top - 12;
+      }).catch(() => setPlayingVideoId(null));
     }
   };
 
   const handleMuteToggle = (e: React.MouseEvent, videoId: string) => {
     e.stopPropagation();
-    const muted = !(mutedVideos[videoId] ?? true);
+    const muted = !(mutedVideos[videoId] ?? false);
     const el = videoRefs.current[videoId];
     if (el) el.muted = muted;
     setMutedVideos(prev => ({ ...prev, [videoId]: muted }));
@@ -155,11 +144,12 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
             activeConversationVideos.map((video) => {
               if(video.sourceType && video.sourceType !== 'upload') return <div key={video.id} className="short-embed-card"><iframe src={video.videoUrl} title="Kısa video" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/></div>;
               const isPlaying = playingVideoId === video.id;
-              const isMuted = mutedVideos[video.id] ?? true;
+              const isMuted = mutedVideos[video.id] ?? false;
 
               return (
                 <div
                   key={video.id}
+                  data-video-card
                   className="group relative bg-black rounded-3xl overflow-hidden shadow-lg border border-stone-800 flex flex-col"
                 >
                   {/* Dikey 9:16 Reels Konumu (Yatay ve Dikey Videoları Kusursuz Uyarlar - İstek #7) */}
@@ -185,7 +175,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                     <video
                       ref={(el) => { videoRefs.current[video.id] = el; }}
                       src={video.videoUrl}
-                      className="relative z-10 w-full h-full object-contain group-hover:scale-[1.02] transition-transform duration-300"
+                      className="relative z-10 w-full h-full object-contain"
                       muted={isMuted}
                       playsInline
                       onEnded={() => setPlayingVideoId(null)}
@@ -206,13 +196,6 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                           <Play className="w-5 h-5 fill-current ml-0.5" />
                         )}
                       </div>
-                    </div>
-
-                    {/* Reels Rozeti & Süre */}
-                    <div className="absolute top-2.5 left-2.5 z-20 flex items-center gap-1.5">
-                      <span className="px-2 py-0.5 rounded-full bg-sage-600/90 text-white text-[9px] font-bold tracking-wider uppercase backdrop-blur-xs">
-                        Reels
-                      </span>
                     </div>
 
                     {/* Süre Etiketi */}
@@ -292,7 +275,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
               <video
                 ref={modalVideoRef}
                 src={modalVideo.videoUrl}
-                muted={mutedVideos[modalVideo.id] ?? true}
+                muted={mutedVideos[modalVideo.id] ?? false}
                 onVolumeChange={e => { const muted = e.currentTarget.muted; setMutedVideos(prev => prev[modalVideo.id] === muted ? prev : { ...prev, [modalVideo.id]: muted }); }}
                 className="w-full h-full object-contain"
                 controls
