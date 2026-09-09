@@ -1,4 +1,5 @@
 import {useEffect,useRef,useState} from 'react';
+import {flushSync} from 'react-dom';
 import {LockKeyhole,Maximize2,Radio} from 'lucide-react';
 import {useContent} from '../../context/ContentContext';
 import {api} from '../../lib/api';
@@ -9,8 +10,31 @@ export function LiveBroadcastView(){
  const embedUrl=liveStream.streamEmbedUrl;
  const isWatching=liveStream.isLive&&(Boolean(embedUrl)||joined);
  useEffect(()=>{if(!isWatching)return;const heartbeat=()=>api('live-viewers',{action:'heartbeat'}).catch(()=>{});heartbeat();const timer=window.setInterval(heartbeat,15000);return()=>{clearInterval(timer);fetch('/api/live-viewers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'leave'}),keepalive:true}).catch(()=>{});};},[isWatching]);
- async function watch(){setBusy(true);setStatus('Yayına bağlanılıyor…');try{const join=await api('zoom/join');const Zoom=(await import('@zoom/meetingsdk/embedded')).default;client.current=Zoom.createClient();await client.current.init({zoomAppRoot:mount.current!,language:'tr-TR',patchJsMedia:true,leaveOnPageUnload:true});client.current.on('connection-change',(event:any)=>{if(event?.state==='Closed')setJoined(false);});await client.current.join(join);setJoined(true);setStatus('');}catch{setStatus('Yayına bağlanılamadı. Yayın açıldığında yeniden deneyin.');}finally{setBusy(false);}}
- async function fullscreen(){if(!document.fullscreenElement)await player.current?.requestFullscreen();else await document.exitFullscreen();}
+ async function watch(){
+  if(busy||joined)return;
+  flushSync(()=>{setBusy(true);setStatus('Yayına bağlanılıyor…');});
+  player.current?.scrollIntoView({behavior:'smooth',block:'start'});
+  let stage='sunucu';
+  try{
+   const join=await api('zoom/join');
+   stage='oynatıcı';
+   const Zoom=(await import('@zoom/meetingsdk/embedded')).default;
+   if(!client.current){
+    const next=Zoom.createClient();
+    await next.init({zoomAppRoot:mount.current!,language:'tr-TR',patchJsMedia:true,leaveOnPageUnload:true});
+    next.on('connection-change',(event:any)=>{if(event?.state==='Closed'){setJoined(false);setStatus('Yayın bağlantısı kapandı. Yeniden bağlanabilirsiniz.');}});
+    client.current=next;
+   }
+   stage='Zoom';
+   await client.current.join(join);
+   setJoined(true);setStatus('');
+  }catch(error:any){
+   const code=String(error?.errorCode??error?.code??'');
+   const reference=/^\d{1,8}$/.test(code)?' Hata kodu: '+code+'.':'';
+   setStatus(stage==='sunucu'?'Site yayın bağlantısı bilgilerini alamadı. Yönetici yayın ayarlarını kontrol etmelidir.':stage==='oynatıcı'?'Zoom oynatıcısı yüklenemedi. Tarayıcıyı yenileyip yeniden deneyin.':'Zoom toplantısına katılım tamamlanamadı. Toplantının açık olduğunu ve katılım ayarlarını kontrol edin.'+reference);
+  }finally{setBusy(false);}
+ }
+ async function fullscreen(){try{if(!document.fullscreenElement)await player.current?.requestFullscreen();else await document.exitFullscreen();}catch{setStatus('Bu tarayıcıda tam ekran açılamadı.');}}
  return <div className="admin-shell live-page"><h1 className="text-4xl mb-4">Canlı Yayın</h1>
  <section className="live-stage">
   <Radio size={36}/>
@@ -25,7 +49,7 @@ export function LiveBroadcastView(){
   {status&&<p role="status">{status}</p>}
  </section>
  <aside className="broadcast-rights-notice"><LockKeyhole size={19}/><p>Herhangi bir video kaydının veya sohbet metninin başka bir yerde yayınlanmasına izin yoktur.</p></aside>
- <div ref={player} className={'live-player '+(joined?'is-visible':'')}><button className="live-fullscreen" onClick={fullscreen}><Maximize2 size={17}/> Tam ekran</button><div ref={mount} className="zoom-mount"/></div>
+ <div ref={player} className={'live-player '+(busy||joined?'is-visible':'')}><button className="live-fullscreen" onClick={fullscreen}><Maximize2 size={17}/> Tam ekran</button><div ref={mount} className="zoom-mount"/></div>
  <LiveQuestions/>
  </div>;
 }
