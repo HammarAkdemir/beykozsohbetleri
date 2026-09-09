@@ -43,6 +43,36 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     if (videoContainerRef.current) videoContainerRef.current.scrollTop = 0;
   }, [activeConversation?.id]);
 
+  React.useEffect(() => {
+    if (!isOpen || playingVideoId || modalVideo) return;
+    const list = videoContainerRef.current;
+    const article = document.querySelector('.reader-shell article');
+    if (!list || !article) return;
+    let frame = 0;
+    const sync = () => {
+      frame = 0;
+      if (window.innerWidth < 768 || list.contains(document.activeElement) && document.activeElement?.tagName === 'IFRAME') return;
+      const bounds = article.getBoundingClientRect();
+      const readingHeight = window.innerHeight - 90;
+      const distance = Math.max(1, bounds.height - readingHeight);
+      const progress = Math.max(0, Math.min(1, (90 - bounds.top) / distance));
+      list.scrollTop = progress * Math.max(0, list.scrollHeight - list.clientHeight);
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(sync); };
+    const observer = new ResizeObserver(schedule);
+    observer.observe(article);
+    observer.observe(list);
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    schedule();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+    };
+  }, [isOpen, activeConversation?.id, activeConversationVideos.length, playingVideoId, modalVideo]);
+
   if (!isOpen) return null;
 
 
@@ -119,7 +149,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
         {/* Video Listesi (Okuma ilerledikçe otomatik aşağı kayar) */}
         <div 
           ref={videoContainerRef}
-          className="flex-1 overflow-y-auto p-4 space-y-5 scroll-smooth select-none"
+          className="flex-1 overflow-y-auto p-4 space-y-5 select-none"
         >
           {activeConversationVideos.length === 0 ? (
             <div className="text-center py-12 px-4 rounded-2xl border border-dashed border-paper-300 dark:border-stone-800 text-stone-400 text-xs flex flex-col items-center">
